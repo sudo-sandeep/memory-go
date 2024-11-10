@@ -1,0 +1,26 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+.flip-card{
+    perspective: 1000px;
+}
+
+.flip-card-inner{
+    transform-style: preserve-3d;
+    transition: all 0.3s;
+}
+
+.flip-card-front,
+.flip-card-back{
+    position: absolute;
+    top:0px;
+    left: 0px;
+    backface-visibility: hidden;
+    display: grid;
+    place-content: center;
+}
+
+.flip-card-back{
+    transform: rotateY(180deg);
+}
