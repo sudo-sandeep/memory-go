@@ -3,169 +3,160 @@ import { v4 as uuidv4 } from "uuid";
 import { motion } from "framer-motion";
 import backCardImage from "../assets/back-card.png";
 import { animalPairs } from "../assets/animals";
-
+import Confetti from "react-confetti";
+import { useWindowSize } from "../utils/hooks/useWindowSize";
 function generateRandomArray(count) {
-  // Ensure count is even
-  if (count % 2 !== 0) {
-    throw new Error("The count must be an even number.");
-  }
+  if (count % 2 !== 0) throw new Error("The count must be an even number.");
 
   const randomArray = [];
-  const usedIndexes = new Set(); // Set to track used indexes
-  const pairsToSelect = count / 2; // We need half the number of pairs in the result array
+  const usedIndexes = new Set();
 
-  // Collect random pairs
   while (randomArray.length < count) {
-    // Select a random object index from the animalPairs array
     const randomIndex = Math.floor(Math.random() * animalPairs.length);
+    if (usedIndexes.has(randomIndex)) continue;
 
-    // Skip if the index has already been used
-    if (usedIndexes.has(randomIndex)) {
-      continue;
-    }
-
-    // Mark this index as used
     usedIndexes.add(randomIndex);
-
-    // Get the selected pair
     const selectedPair = animalPairs[randomIndex];
 
-    // Push the selected pair twice with the same id
-    randomArray.push({
-      initial: selectedPair.initial,
-      matched: selectedPair.matched,
-      id: selectedPair.id, // Same id for both images in the pair
-    });
-    randomArray.push({
-      initial: selectedPair.initial,
-      matched: selectedPair.matched,
-      id: selectedPair.id, // Same id for both images in the pair
-    });
+    randomArray.push(
+      { ...selectedPair, id: selectedPair.id },
+      { ...selectedPair, id: selectedPair.id }
+    );
   }
 
-  // Randomly shuffle the array to mix the order of the pairs
+  // Shuffle array
   for (let i = randomArray.length - 1; i > 0; i--) {
     const j = Math.floor(Math.random() * (i + 1));
-    [randomArray[i], randomArray[j]] = [randomArray[j], randomArray[i]]; // Swap elements
+    [randomArray[i], randomArray[j]] = [randomArray[j], randomArray[i]];
   }
 
   return randomArray;
 }
+
 const Grid = ({ size }) => {
+  const { width, height } = useWindowSize();
+  const [confetti, setConfetti] = useState(false);
   const [isGameEnd, setIsGameEnd] = useState(false);
   const [newGame, setNewGame] = useState(true);
+  const [activeCard, setActiveCard] = useState(null);
+  const [clickLock, setClickLock] = useState(false); // Lock to prevent fast clicks
+
   const initialGrid = useMemo(() => {
     const frontArray = generateRandomArray(size * size);
-    return new Array(Math.pow(size, 2)).fill(null).map((_, index) => ({
+    return frontArray.map((item, index) => ({
       back: "69",
-      frontImage: frontArray[index],
+      frontImage: item,
       isFlipped: false,
       id: uuidv4(),
-      matchId: frontArray[index].id,
+      matchId: item.id,
       isMatched: false,
       isAnimating: false,
     }));
   }, [size, newGame]);
+
   const [grid, setGrid] = useState(initialGrid);
 
-  useEffect(() => {
-    setGrid(initialGrid);
-  }, [initialGrid]);
-
-  const [activeCard, setActiveCard] = useState(null);
+  useEffect(() => setGrid(initialGrid), [initialGrid]);
 
   const handleAnimation = async (card) => {
     if (!card.isAnimating) {
-      const newGrid = grid.map((item) =>
-        item.id === card.id
-          ? { ...item, isFlipped: true, isAnimating: true }
-          : item
+      setGrid((prevGrid) =>
+        prevGrid.map((item) =>
+          item.id === card.id
+            ? { ...item, isFlipped: true, isAnimating: true }
+            : item
+        )
       );
-      setGrid(newGrid);
+      await new Promise((resolve) => setTimeout(resolve, 300));
     }
-    await new Promise((resolve) => setTimeout(resolve, 600));
   };
 
   const handleCardFlip = async (card) => {
+    if (clickLock || card.isFlipped || card.isMatched) return; // Prevent flipping if locked or already matched
+
+    setClickLock(true); // Lock clicks during processing
     await handleAnimation(card);
-    let newGrid = grid;
+    let updatedGrid = grid;
+
     if (activeCard) {
       if (activeCard.id === card.id) {
-        newGrid = grid.map((item) =>
+        updatedGrid = grid.map((item) =>
           item.id === card.id ? { ...item, isFlipped: false } : item
         );
         setActiveCard(null);
       } else if (activeCard.matchId === card.matchId) {
-        newGrid = grid.map((item) =>
+        updatedGrid = grid.map((item) =>
           item.id === card.id || item.id === activeCard.id
             ? { ...item, isFlipped: true, isMatched: true }
             : item
         );
+        setActiveCard(null);
       } else {
-        newGrid = grid.map((item) =>
+        updatedGrid = grid.map((item) =>
           item.id === card.id || item.id === activeCard.id
-            ? { ...item, isFlipped: false, isMatched: false }
+            ? { ...item, isFlipped: false }
             : item
         );
         await handleAnimation(activeCard);
+        setActiveCard(null);
       }
-      setActiveCard(null);
     } else {
-      newGrid = grid.map((item) =>
+      updatedGrid = grid.map((item) =>
         item.id === card.id ? { ...item, isFlipped: !item.isFlipped } : item
       );
       setActiveCard(card);
     }
-    setGrid(newGrid);
+
+    setGrid(updatedGrid);
+    setClickLock(false); // Unlock clicks after processing
   };
 
   const handleAnimationOver = (card) => {
-    const newGrid = grid.map((item) =>
-      item.id === card.id ? { ...item, isAnimating: false } : item
+    setGrid((prevGrid) =>
+      prevGrid.map((item) =>
+        item.id === card.id ? { ...item, isAnimating: false } : item
+      )
     );
-    setGrid(newGrid);
   };
 
   useEffect(() => {
-    const allAreMatched = grid.every((item) => item.isMatched === true);
-    if (allAreMatched) {
+    let timer = null;
+    if (grid.every((item) => item.isMatched)) {
       setIsGameEnd(true);
+      setConfetti(true);
+      timer = setTimeout(() => {
+        setConfetti(false);
+      }, 7000);
     }
-    // let timer;
-    // if(allAreMatched){
-    //   timer = setTimeout(()=>{setIsGameEnd(true)},1000)
-    // }
-    // return () => {
-    //   clearTimeout(timer)
-    // }
+    return () => {
+      clearInterval(timer);
+    };
   }, [grid]);
 
   return (
     <>
-      <div
-        className={`border border-gray-500 rounded h-[302px] w-[302px] flex flex-wrap`}
-      >
+      <div className="border border-gray-500 rounded aspect-square w-[152px] sm:w-[252px] md:w-[302px] flex flex-wrap">
         {grid.map((item) => (
           <div
-            className={`flip-card flex border border-gray-500 col-span-1 cursor-pointer place-content-center`}
+            className="flip-card flex border border-gray-500 cursor-pointer"
             style={{ height: `${100 / size}%`, width: `${100 / size}%` }}
             key={item.id}
             onClick={() => handleCardFlip(item)}
           >
             <motion.button
-              className="disabled:cursor-auto h-full w-full flip-card-inner"
+              className="h-full w-full flip-card-inner"
               initial={false}
               animate={{ rotateY: item.isFlipped ? 180 : 360 }}
-              transition={{ duration: 0.3, animationDirection: "normal" }}
-              disabled={item.isMatched || item.isAnimating}
-              onAnimationComplete={handleAnimationOver}
+              transition={{ duration: 0.3 }}
+              disabled={item.isMatched || item.isAnimating || clickLock}
+              onAnimationComplete={() => handleAnimationOver(item)}
             >
               <div
                 className={`flip-card-back w-full h-full ${
                   item.isMatched
-                    ? "bg-green-500 text-white"
-                    : "bg-cyan-950  text-white"
-                } bg-cover text-4xl`}
+                    ? "bg-gradient-to-r from-sky-500 to-emerald-500"
+                    : "bg-cyan-950"
+                } bg-cover`}
                 style={{
                   backgroundImage: item.isMatched
                     ? `url(${item.frontImage.matched})`
@@ -180,18 +171,32 @@ const Grid = ({ size }) => {
           </div>
         ))}
       </div>
+      {confetti && (
+        <Confetti width={width} height={height} tweenDuration={5000} numberOfPieces={500}/>
+      )}
       {isGameEnd && (
-        <div className="text-center mt-4">
-          <button
-            className="border border-emerald-500 px-12 py-1 rounded hover:bg-emerald-400"
-            onClick={() => {
-              setNewGame(!newGame);
-              setGrid(initialGrid);
-            }}
-          >
-            Restart
-          </button>
-        </div>
+        <>
+          <div>
+            <h2 className="text-xl text-emerald-500 font-semibold text-center">
+              You Won!
+            </h2>
+          </div>
+          <div className="text-center">
+            <button
+              className="border border-emerald-500 px-12 py-1 rounded hover:bg-emerald-400 disabled:pointer-events-none"
+              disabled={confetti}
+              onClick={() => {
+                setNewGame(!newGame);
+                setGrid(initialGrid);
+                setIsGameEnd(false);
+                setActiveCard(null);
+                setClickLock(false);
+              }}
+            >
+              Restart
+            </button>
+          </div>
+        </>
       )}
     </>
   );

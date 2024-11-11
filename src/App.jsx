@@ -17,11 +17,11 @@ const App = () => {
       <p className="text-center text-xs font-semibold uppercase text-green-800">
         Test your memory with memory go
       </p>
-      <div className="mt-8 border border-black w-1/2 mx-auto p-2 rounded h-[450px]">
+      <div className="mt-8 border border-black w-1/2 mx-auto p-2 rounded h-[460px]">
         <h2 className="text-center text-sm font-semibold">
           Choose your grid size{" "}
         </h2>
-        <div className="flex gap-4 mt-2">
+        <div className="flex flex-col gap-4 mt-2 sm:flex-row">
           {GRID_SIZE_OPTIONS.map((item) => (
             <div
               key={uuidv4()}
